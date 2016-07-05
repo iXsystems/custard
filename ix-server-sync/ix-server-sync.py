@@ -2,7 +2,6 @@
 from __future__ import print_function
 import os, sys
 import json
-import re
 
 debug = False
 verbose = False
@@ -138,12 +137,11 @@ def GetTrains(trains_data):
     Return a list of trains for the given project.
     """
     retval = []
-    rx = re.compile("([^ \t]+)[ \t]+(.*)$")
     
     for train in trains_data.split("\n"):
-        matches = rx.match(train)
-        if matches:
-            retval.append(matches.group(1))
+        tmp = train.split()
+        if tmp:
+            retval.append(tmp[0])
 
     return retval
 
