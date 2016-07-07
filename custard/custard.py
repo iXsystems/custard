@@ -5,6 +5,7 @@ import socket
 import re
 import subprocess
 import json
+import copy
 
 """
 Caching Update Server Tsomething And Resource Deployment
@@ -25,7 +26,7 @@ The sync script can be run, or it can be updated.  The system can be
 shut down or rebooted.
 """
 
-debug = False
+debug = True
 rcconf = "/etc/rc.conf"
 resolvconf = "/etc/resolv.conf"
 cache_dir = "/usr/local/www/nginx"
@@ -33,6 +34,9 @@ cache_tool = "/usr/local/bin/ix-server-sync.py"
 # This is a json file
 if debug:
     ConfigurationFile = "/tmp/custard.conf"
+    rcconf = "/tmp/rc.conf"
+    resolvconf = "/tmp/resolv.conf"
+    cache_dir = "/tmp/nginx"
 else:
     ConfigurationFile = "/usr/local/etc/custard.conf"
 
@@ -112,16 +116,11 @@ class Configuration(object):
         except:
             tdict = {}
                 
-        self.url_list = tdict[Configuration.URL_KEY] \
-                        if (Configuration.URL_KEY in tdict) else Configuration.default_urls
-        self.projects = tdict[Configuration.PROJECT_KEY] \
-                        if (Configuration.PROJECT_KEY in tdict) else Configuration.default_projects
-        self.trains = tdict[Configuration.TRAIN_KEY] \
-                      if (Configuration.TRAIN_KEY in tdict) else Configuration.default_trains
-        self.deep = tdict[Configuration.DEEP_KEY] \
-                    if (Configuration.DEEP_KEY in tdict) else Configuration.default_deep
-        self.verbose = tdict[Configuration.VERBOSE_KEY] \
-                       if (Configuration.VERBOSE_KEY in tdict) else Configuration.default_verbose
+        self.url_list = tdict.pop(Configuration.URL_KEY, Configuration.default_urls)
+        self.projects = tdict.pop(Configuration.PROJECT_KEY, Configuration.default_projects)
+        self.trains = tdict.pop(Configuration.TRAIN_KEY, Configuration.default_trains)
+        self.deep = tdict.pop(Configuration.DEEP_KEY, Configuration.default_deep)
+        self.verbose = tdict.pop(Configuration.VERBOSE_KEY, Configuration.default_verbose)
         
         if isinstance(fobj, str) and infile:
             infile.close()
@@ -355,10 +354,7 @@ def WriteConfiguration(conf):
     """
     import tempfile
     
-    if "nic" in conf:
-        ifname = conf["nic"]
-    else:
-        ifname = GetInterfaceName()
+    nics = conf.get("nics") or {}
         
     print("WriteConfiguration: rcconf = %s" % rcconf)
     try:
@@ -367,36 +363,35 @@ def WriteConfiguration(conf):
         if "content" in conf:
             for line in conf["content"]:
                 tf.write(line + "\n")
-        if "ifconfig" in conf:
-            tf.write("ifconfig_%s=\"%s\"\n" % (ifname, conf["ifconfig"]))
-            if conf["ifconfig"] != "DHCP" and "resolver" in conf:
+        for nic in nics.keys():
+            tf.write("ifconfig_%s=\"%s\"\n" % (nic, nics[nic]))
+        if "resolver" in conf:
+            try:
+                resolver = conf["resolver"]
+                tmp_resolv = None
+                tmp_resolv = tempfile.NamedTemporaryFile(prefix=resolvconf, delete=False)
+                if "search" in resolver:
+                    print("search %s" % resolver["search"], file=tmp_resolv)
+                if "nameserver" in resolver:
+                    for server in resolver["nameserver"]:
+                        print("nameserver %s" % server, file=tmp_resolv)
+                if "domain" in resolver:
+                    print("domain %s" % resolver["domain"], file=tmp_resolv)
                 try:
-                    resolver = conf["resolver"]
-                    tmp_resolv = None
-                    tmp_resolv = tempfile.NamedTemporaryFile(prefix=resolvconf, delete=False)
-                    if "search" in resolver:
-                        print("search %s" % resolver["search"], file=tmp_resolv)
-                    if "nameserver" in resolver:
-                        for server in resolver["nameserver"]:
-                            print("nameserver %s" % server, file=tmp_resolv)
-                    if "domain" in resolver:
-                        print("domain %s" % resolver["domain"], file=tmp_resolv)
-                    try:
-                        os.rename(tmp_resolv.name, resolvconf)
-                    except BaseException as e:
-                        print("Could not write " + resolvconf, file=sys.stderr)
-                    finally:
-                        if tmp_resolv:
-                            tmp_resolv.close
+                    os.rename(tmp_resolv.name, resolvconf)
                 except BaseException as e:
-                    print("Could not write new " + resolvconf, file=sys.stderr)
+                    print("Could not write " + resolvconf, file=sys.stderr)
+                finally:
+                    if tmp_resolv:
+                        tmp_resolv.close
+            except BaseException as e:
+                print("Could not write new " + resolvconf, file=sys.stderr)
             
         for k in ["hostname", "defaultrouter"]:
             if k in conf:
                 tf.write("%s=\"%s\"\n" % (k, conf[k]))
         os.rename(tf.name, rcconf)
         tf.close()
-        tf = None
     except BaseException as e:
         print("Unable to write rc.conf")
         if tf:
@@ -414,21 +409,19 @@ def ParseRC():
     """
     rv = {}
     lines = []
-    rv["nic"] = GetInterfaceName()
+    nics = {}
+    nic_re = re.compile("^ifconfig_([^=]+)=\"?([^\"]*)\"?")
+    try:
+        rv["resolver"] = ParseResolveConf()
+    except:
+        pass
     try:
         with open(rcconf) as conf:
             for line in conf:
                 line = line.rstrip()
-                if line.startswith("ifconfig_%s=" % rv["nic"]):
-                    cfg = line.split("=")[1]
-                    if cfg.startswith("\""):
-                        cfg = cfg[1:-1]
-                    rv["ifconfig"] = cfg
-                    if cfg != "DHCP":
-                        try:
-                            rv["resolver"] = ParseResolvConf()
-                        except BaseException as e:
-                            pass
+                if nic_re.match(line):
+                    parsed = nic_re.match(line)
+                    nics[parsed.group(1)] = parsed.group(2)
                 elif line.startswith("hostname="):
                     cfg = line.split("=")[1]
                     if cfg.startswith("\""):
@@ -443,6 +436,21 @@ def ParseRC():
                     lines.append(line)
     except BaseException as e:
         raise
+    # Not part of rc.conf, but we look through the interfaces on the system as well
+    try:
+        ifcs = subprocess.check_output(["/sbin/ifconfig", "-l"]).split()
+        for ifn in ifcs:
+            if ifn.startswith("lo"):
+                continue
+            if ifn.startswith("tun"):
+                continue
+            if ifn not in nics:
+                nics[ifn] = None
+    except:
+        pass
+    
+    if nics:
+        rv["nics"] = nics
     rv["content"] = lines
     return rv
     
@@ -491,10 +499,7 @@ def ConfigInterface(config):
     Hostname [current value]: 
     """
     ifname = config["nic"]
-    if "ifconfig" in config:
-        current = config["ifconfig"]
-    else:
-        current = None
+    current = config.get("ifconfig")
 
     if sys.version_info[0] < 3:
         asker = raw_input
@@ -610,6 +615,9 @@ def RunCacheTool(arg):
 
 def Reboot(how):
     import subprocess
+    if debug:
+        print("splaaaaaaaaaaaaaaat", file=sys.stderr)
+        return
     shutdown = ["/sbin/shutdown"]
     if how == "reboot":
         shutdown.append("-r")
@@ -621,8 +629,107 @@ def Reboot(how):
     except:
         print("Shutdown failed")
         
+def ConfigInterface(ifconfig):
+    """
+    Prompt to configure the given network interface.
+    Caller must determine if DHCP is being used, to configure
+    DNS and a default router.
+    Returns the new interface configuration.
+
+    To ask for network change:
+    
+    Enter new values (hit return for default):
+    NIC Configuration [DHCP]: 
+    if not DHCP:
+	    validate input a bit
+    """
+    if sys.version_info[0] < 3:
+        asker = raw_input
+    else:
+        asker = input
+
+    orig = ifconfig
+    # First ask whether or not to set the address via DHCP
+    # Default answer is whether or not it already is
+    print("Press enter for default answer; Control-D to exit with no changes.")
+    
+    dhcp = False
+    try:
+        if ifconfig == "DHCP":
+            default = True
+        else:
+            default = False
+        yesno = Ask("Use DHCP", default, use_boolean=True)
+
+        if yesno:
+            ifconfig = "DHCP"
+        else:
+            # Need to ask about address, netmask, and resolver information
+            new_if = Ask("""Enter IP address in one of the following formats:
+            1.2.3.4/24
+            1.2.3.4 24
+            1.2.3.4 netmask 24
+            1.2.3.4 netmask 255.255.255.0
+            1.2.3.4 netmask 0xffffff00
+            DHCP
+            IP address""", ifconfig)
+            # Need to validate input
+            if new_if != ifconfig:
+                try:
+                    if new_if == "DHCP":
+                        ifconfig = "DHCP"
+                    else:
+                        ifconfig = ParseNetwork(new_if)
+                except ValueError as e:
+                    print("Invalid IP address format")
+                    raise
+            
+    except EOFError:
+        print("\nNo changes made")
+        return orig
+    
+    return ifconfig
+
 def DoConfigInterface(old_config):
-    new_config = ConfigInterface(old_config)
+    new_config = copy.deepcopy(old_config)
+    
+    nics = new_config.get("nics") or {}
+
+    use_dhcp = False
+    for iface in nics.keys():
+        if Ask("Enable interface {0}".format(iface), nics[iface] is not None, use_boolean=True):
+            new_ifconfig = ConfigInterface(nics[iface])
+            if new_ifconfig == "DHCP":
+                use_dhcp = True
+            if new_ifconfig != nics[iface]:
+                print("%s changed %s -> %s" % (iface, nics[iface], new_ifconfig))
+                nics[iface] = new_ifconfig
+        else:
+            nics[iface] = None
+        print("{0}=\"{1}\"".format(iface, nics[iface]), file=sys.stderr)
+    
+    if use_dhcp is True:
+        new_config.pop("resolver", None)
+        new_config.pop("defaultrouter", None)
+    else:    
+        new_router = Ask("Enter default router address", new_config.get("defaultrouter"))
+        if new_router != new_config.get("defaultrouter"):
+            new_config["defaultrouter"] = new_router
+        resolver = new_config.get("resolver")
+        current_resolver = None
+        if resolver:
+            current_resolver = resolver.get("nameserver")
+        if current_resolver:
+            current_resolver = ", ".join(map(str, current_resolver))
+        new_resolver = Ask("Enter DNS Server", current_resolver)
+        if new_resolver:
+            for addr in new_resolver.split(", "):
+                if ValidIPAddr(addr) is False:
+                    print("Invalid IP address for DNS {0}".format(addr), file=sys.stderr)
+                    raise ValueError("Invalid IP address {0}".format(addr))
+            new_config["resolver"] = {}
+            new_config["resolver"]["nameserver"] = new_resolver.split(", ")
+
     if new_config != old_config:
         try:
             yesno = Ask("Confirm reboot (changes will not be written unless reboot is confirmed", False, use_boolean=True)
