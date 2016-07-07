@@ -26,7 +26,7 @@ The sync script can be run, or it can be updated.  The system can be
 shut down or rebooted.
 """
 
-debug = True
+debug = False
 rcconf = "/etc/rc.conf"
 resolvconf = "/etc/resolv.conf"
 cache_dir = "/usr/local/www/nginx"
