@@ -17,6 +17,7 @@ install -m 644 files/gettytab /etc/gettytab
 install -m 755 files/custard.sh /etc/custard.sh
 install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/
 install -m 755 custard/custard.py /usr/local/bin/
+install -m 644 files/rc.conf /etc/rc.conf
 
 # Prep the VM with packages we need
 for i in $PKGLIST
