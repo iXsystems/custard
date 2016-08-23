@@ -1,5 +1,15 @@
 #!/bin/sh
 
+rc_halt()
+{
+  echo "Running: $@"
+  ${@}
+  if [ $? -ne 0 ] ; then
+    echo "Failed running: $@"
+    exit 1
+  fi
+}
+
 # Scary warning to stop somebody who maybe typed 'make install' on
 # their desktop / server, not knowing what it does
 echo "This will prepare a fresh FreeBSD VM to become a custard image..."
@@ -10,14 +20,6 @@ read -t 10 tmp
 
 # List of packages
 PKGLIST="lang/python27 net/mDNSResponder www/nginx emulators/open-vm-tools-nox11"
-
-# Install our files
-install -m 644 files/ttys /etc/ttys
-install -m 644 files/gettytab /etc/gettytab
-install -m 755 files/custard.sh /etc/custard.sh
-install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/
-install -m 755 custard/custard.py /usr/local/bin/
-install -m 644 files/rc.conf /etc/rc.conf
 
 # Prep the VM with packages we need
 for i in $PKGLIST
@@ -32,5 +34,16 @@ do
     exit 1
   fi
 done
+
+# Install our files
+rc_halt "install -m 644 files/ttys /etc/ttys"
+rc_halt "install -m 644 files/gettytab /etc/gettytab"
+rc_halt "install -m 755 files/custard.sh /etc/custard.sh"
+rc_halt "install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/ix-server-sync.py"
+rc_halt "install -m 755 custard/custard.py /usr/local/bin/custard.py"
+rc_halt "install -m 644 files/rc.conf /etc/rc.conf"
+
+# Cleanup resolv.conf for next boot
+rm /etc/resolv.conf
 
 exit 0
