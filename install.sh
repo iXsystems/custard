@@ -19,7 +19,7 @@ echo "Will install in 10 seconds..."
 read -t 10 tmp
 
 # List of packages
-PKGLIST="lang/python27 net/mDNSResponder www/nginx emulators/open-vm-tools-nox11"
+PKGLIST="lang/python2 lang/python27 net/mDNSResponder www/nginx emulators/open-vm-tools-nox11"
 
 # Prep the VM with packages we need
 for i in $PKGLIST
