@@ -43,6 +43,11 @@ rc_halt "install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/ix-serve
 rc_halt "install -m 755 custard/custard.py /usr/local/bin/custard.py"
 rc_halt "install -m 644 files/rc.conf /etc/rc.conf"
 
+# Make sure /usr/local/bin/python exists
+if [ ! -e "/usr/local/bin/python" ] ; then
+  ln -s python2 /usr/local/bin/python
+fi
+
 # Cleanup resolv.conf for next boot
 rm /etc/resolv.conf
 
