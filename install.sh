@@ -38,6 +38,7 @@ done
 # Install our files
 rc_halt "install -m 644 files/ttys /etc/ttys"
 rc_halt "install -m 644 files/gettytab /etc/gettytab"
+rc_halt "install -m 644 files/crontab /etc/crontab"
 rc_halt "install -m 755 files/custard.sh /etc/custard.sh"
 rc_halt "install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/ix-server-sync.py"
 rc_halt "install -m 755 custard/custard.py /usr/local/bin/custard.py"

@@ -804,6 +804,14 @@ def main():
     Present the menu, and handle all the operations
     """
     system_config = ParseRC()
+
+    """
+    Check if we just want to update the cache and exit
+    """
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--update-cache":
+            RunCacheTool(cache_dir)
+            sys.exit(0)
     
     menu_items = [
         ("Configure Networking", DoConfigInterface, system_config),
