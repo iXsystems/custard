@@ -1,5 +1,6 @@
 #!/usr/local/bin/python
 from __future__ import print_function
+from crontab import CronTab
 import os, sys
 import socket
 import re
@@ -799,6 +800,30 @@ def ConfigureCacheTool(unsued=None):
         print("Unable to save configuration file: {0}".format(str(e)), file=sys.stderr)
     return
 
+def ConfigureCron(unsued=None):
+    """
+    Automated cron update
+    We can set the following things:
+    1) Enable/Disable cron updates
+    2) Set time
+    """
+    system_cron = CronTab(tabfile='/etc/crontab')
+
+    enablecron = Ask("Enable cron updating?", True, use_boolean=True)
+    system_cron.remove_all('/usr/local/bin/custard.py --update-cache')
+    if enablecron:
+	cronhour = Ask("Run at what hour?", "00-23")
+	if cronhour.isdigit() and 0 <= int(cronhour) <= 24:
+	    job = system_cron.new('/usr/local/bin/custard.py --update-cache')
+	    job.hour.on(cronhour)
+	    job.minute.on('00')
+	else:
+	    print("\nInvalid hour range!")
+	    return
+
+    system_cron.write()
+    return
+
 def main():
     """
     Present the menu, and handle all the operations
@@ -820,6 +845,7 @@ def main():
         ("Check for cache-tool update", RunCacheTool, "--check-for-update"),
         ("Configure cache tool settings", ConfigureCacheTool, None),
         ("Shell", RunShell, None),
+        ("Configure cron updates", ConfigureCron, None),
         ("Reboot", Reboot, "reboot"),
         ("Shutdown", Reboot, "shutdown"),
         ("Exit", sys.exit, 0),

@@ -19,7 +19,7 @@ echo "Will install in 10 seconds..."
 read -t 10 tmp
 
 # List of packages
-PKGLIST="lang/python2 lang/python27 net/mDNSResponder www/nginx emulators/open-vm-tools-nox11 tmux"
+PKGLIST="lang/python2 lang/python27 net/mDNSResponder www/nginx emulators/open-vm-tools-nox11 tmux sysutils/py-crontab"
 
 # Prep the VM with packages we need
 for i in $PKGLIST
@@ -38,7 +38,6 @@ done
 # Install our files
 rc_halt "install -m 644 files/ttys /etc/ttys"
 rc_halt "install -m 644 files/gettytab /etc/gettytab"
-rc_halt "install -m 644 files/crontab /etc/crontab"
 rc_halt "install -m 755 files/custard.sh /etc/custard.sh"
 rc_halt "install -m 755 ix-server-sync/ix-server-sync.py /usr/local/bin/ix-server-sync.py"
 rc_halt "install -m 755 custard/custard.py /usr/local/bin/custard.py"
