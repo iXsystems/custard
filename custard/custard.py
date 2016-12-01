@@ -696,8 +696,8 @@ def DoConfigInterface(old_config):
     
     nics = new_config.get("nics") or {}
 
-    use_dhcp = False
     for iface in nics.keys():
+        use_dhcp = False
         if Ask("Enable interface {0}".format(iface), nics[iface] is not None, use_boolean=True):
             new_ifconfig = ConfigInterface(nics[iface])
             if new_ifconfig == "DHCP":
