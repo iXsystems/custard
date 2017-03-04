@@ -807,14 +807,14 @@ def ConfigureCron(unsued=None):
     1) Enable/Disable cron updates
     2) Set time
     """
-    system_cron = CronTab(tabfile='/etc/crontab')
+    system_cron = CronTab(tabfile='/etc/crontab', user=False)
 
     enablecron = Ask("Enable cron updating?", True, use_boolean=True)
     system_cron.remove_all('/usr/local/bin/custard.py --update-cache')
     if enablecron:
 	cronhour = Ask("Run at what hour?", "00-23")
 	if cronhour.isdigit() and 0 <= int(cronhour) <= 24:
-	    job = system_cron.new('/usr/local/bin/custard.py --update-cache')
+	    job = system_cron.new(command='/usr/local/bin/custard.py --update-cache', user='root')
 	    job.hour.on(cronhour)
 	    job.minute.on('00')
 	else:
